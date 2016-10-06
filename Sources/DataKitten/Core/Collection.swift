@@ -16,6 +16,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 import BSON
+import Foundation
 
 public class Collection {
     let db: Database
@@ -35,16 +36,22 @@ public class Collection {
             document["_id"] = id
         }
         
-        try db.storageEngine.storeDocument(document, inCollectionNamed: name)
+        try db.storageEngine.storeDocument(Data(bytes: document.bytes), inCollectionNamed: name)
         
         return id
     }
     
     public func findOne() throws -> Document? {
-        return try self.find().next()
+        if let data = try self.db.storageEngine.findDocuments(inCollectionNamed: name).next() {
+            return Document(data: data)
+        }
+        
+        return nil
     }
     
-    public func find() throws -> Cursor {
-        return try self.db.storageEngine.findDocuments(inCollectionNamed: name)
+    public func find() throws -> [Document] {
+        return try self.db.storageEngine.findDocuments(inCollectionNamed: name).makeIterator().flatMap { data in
+            return Document(data: data)
+        }
     }
 }

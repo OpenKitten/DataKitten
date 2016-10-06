@@ -26,7 +26,7 @@ public class DefaultCursor : Cursor {
         self.handle = handle
     }
     
-    public override func next() throws -> Document? {
+    public override func next() throws -> Data? {
         handle.seek(toFileOffset: seekPosition)
         let lengthData = handle.readData(ofLength: 4)
         
@@ -41,6 +41,6 @@ public class DefaultCursor : Cursor {
         
         seekPosition += UInt64(length)
         
-        return Document(data: documentData)
+        return documentData
     }
 }

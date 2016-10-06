@@ -56,10 +56,10 @@ public class StorageEngine {
         return handle
     }
     
-    public func storeDocument(_ document: Document, inCollectionNamed collection: String) throws {
+    public func storeDocument(_ data: Data, inCollectionNamed collection: String) throws {
         let handle = try getHandle(forCollectionNamed: collection)
         handle.seekToEndOfFile()
-        let data = Data(bytes: document.bytes)
+        let data = Data(data)
         handle.write(data)
     }
     

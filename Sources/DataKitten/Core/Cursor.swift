@@ -18,11 +18,11 @@
 import Foundation
 
 open class Cursor : Sequence {
-    func next() throws -> Document? {
+    func next() throws -> Data? {
         fatalError("next() should be implemented by subclasses of Cursor")
     }
 
-    public func makeIterator() -> AnyIterator<Document> {
+    public func makeIterator() -> AnyIterator<Data> {
         return AnyIterator {
             return (try? self.next()) ?? nil
         }
