@@ -15,40 +15,16 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-import XCTest
-@testable import DataKitten
+import Foundation
 
-class DataKittenTests: XCTestCase {
-    var storage: StorageEngine! = nil
-    var db: Database! = nil
-    var col: DataKitten.Collection! = nil
-    
-    override func setUp() {
-        self.storage = try! StorageEngine(path: "/Users/robbert/Desktop/DataKittenDB")
-        self.db = Database(storage: storage)
-        self.col = db["testcol"]
+open class Cursor : Sequence {
+    func next() throws -> Document? {
+        fatalError("next() should be implemented by subclasses of Cursor")
     }
-    
-    func testInsert() throws {
-        try col.insert(["hello": "world"])
-    }
-    
-    func testFindOne() throws {
-        guard let doc = try col.findOne() else {
-            XCTFail("no document found")
-            return
-        }
-        
-        XCTAssertEqual(doc["hello"], "world")
-    }
-    
-    func testFind() throws {
-        let docs = Array(try col.find())
-        
-        XCTAssertGreaterThan(docs.count, 1)
-        
-        for doc in docs {
-            XCTAssertEqual(doc["hello"], "world")
+
+    public func makeIterator() -> AnyIterator<Document> {
+        return AnyIterator {
+            return (try? self.next()) ?? nil
         }
     }
 }

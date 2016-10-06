@@ -18,7 +18,7 @@
 
 import Foundation
 
-public enum StorageError : Error {
+public enum DefaultStorageError : Error {
     case directoryDoesNotExist(atPath: String)
 }
 
@@ -28,7 +28,7 @@ public class StorageEngine {
     public init(path: String) throws {
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) else {
-            throw StorageError.directoryDoesNotExist(atPath: path)
+            throw DefaultStorageError.directoryDoesNotExist(atPath: path)
         }
         
         // TODO: Ensure trailing slash.
@@ -62,4 +62,11 @@ public class StorageEngine {
         let data = Data(bytes: document.bytes)
         handle.write(data)
     }
+    
+    public func findDocuments(inCollectionNamed collection: String) throws -> DefaultCursor {
+        let handle = try getHandle(forCollectionNamed: collection)
+        return DefaultCursor(handle: handle)
+    }
 }
+
+

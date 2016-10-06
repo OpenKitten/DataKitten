@@ -15,28 +15,32 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+import Foundation
 import BSON
 
-public class Collection {
-    let db: Database
-    let name: String
+public class DefaultCursor : Cursor {
+    private let handle: FileHandle
+    private var seekPosition: UInt64 = 0 // the start position of the next document to examine in a full collection scan
     
-    internal init(named name: String, in database: Database) {
-        self.name = name
-        self.db = database
+    internal init(handle: FileHandle) {
+        self.handle = handle
     }
     
-    @discardableResult
-    func insert(_ document: Document) throws -> Value {
-        var document = document
-        var id = document["_id"]
-        if id == .nothing || id == .null {
-            id = ~ObjectId()
-            document["_id"] = id
+    public override func next() throws -> Document? {
+        handle.seek(toFileOffset: seekPosition)
+        let lengthData = handle.readData(ofLength: 4)
+        
+        if lengthData.count < 4 {
+            return nil
         }
         
-        try db.storageEngine.storeDocument(document, inCollectionNamed: name)
+        let length = try fromBytes(lengthData) as Int32
         
-        return id
+        // TODO: Do not crash on invalid bson length specification
+        let documentData = lengthData + handle.readData(ofLength: length-4)
+        
+        seekPosition += UInt64(length)
+        
+        return Document(data: documentData)
     }
 }

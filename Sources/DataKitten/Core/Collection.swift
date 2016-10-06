@@ -15,40 +15,36 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-import XCTest
-@testable import DataKitten
+import BSON
 
-class DataKittenTests: XCTestCase {
-    var storage: StorageEngine! = nil
-    var db: Database! = nil
-    var col: DataKitten.Collection! = nil
+public class Collection {
+    let db: Database
+    let name: String
     
-    override func setUp() {
-        self.storage = try! StorageEngine(path: "/Users/robbert/Desktop/DataKittenDB")
-        self.db = Database(storage: storage)
-        self.col = db["testcol"]
+    internal init(named name: String, in database: Database) {
+        self.name = name
+        self.db = database
     }
     
-    func testInsert() throws {
-        try col.insert(["hello": "world"])
-    }
-    
-    func testFindOne() throws {
-        guard let doc = try col.findOne() else {
-            XCTFail("no document found")
-            return
+    @discardableResult
+    public func insert(_ document: Document) throws -> Value {
+        var document = document
+        var id = document["_id"]
+        if id == .nothing || id == .null {
+            id = ~ObjectId()
+            document["_id"] = id
         }
         
-        XCTAssertEqual(doc["hello"], "world")
+        try db.storageEngine.storeDocument(document, inCollectionNamed: name)
+        
+        return id
     }
     
-    func testFind() throws {
-        let docs = Array(try col.find())
-        
-        XCTAssertGreaterThan(docs.count, 1)
-        
-        for doc in docs {
-            XCTAssertEqual(doc["hello"], "world")
-        }
+    public func findOne() throws -> Document? {
+        return try self.find().next()
+    }
+    
+    public func find() throws -> Cursor {
+        return try self.db.storageEngine.findDocuments(inCollectionNamed: name)
     }
 }
