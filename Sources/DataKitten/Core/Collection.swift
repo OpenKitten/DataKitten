@@ -36,13 +36,13 @@ public class Collection {
             document["_id"] = id
         }
         
-        try db.storageEngine.storeDocument(Data(bytes: document.bytes), inCollectionNamed: name)
+        try db.storageEngine.storeDocument(document, inCollectionNamed: name)
         
         return id
     }
     
     public func findOne() throws -> Document? {
-        if let data = try self.db.storageEngine.findDocuments(inCollectionNamed: name).next() {
+        if let data = try self.db.storageEngine.makeDataIterator(inCollectionNamed: name).next() {
             return Document(data: data)
         }
         
@@ -50,7 +50,7 @@ public class Collection {
     }
     
     public func find() throws -> [Document] {
-        return try self.db.storageEngine.findDocuments(inCollectionNamed: name).makeIterator().flatMap { data in
+        return try self.db.storageEngine.makeDataIterator(inCollectionNamed: name).flatMap { data in
             return Document(data: data)
         }
     }

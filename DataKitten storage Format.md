@@ -20,8 +20,8 @@ Every DataKitten file starts with four static bytes (`0x4D 0x65 0x6F 0x77`) , fo
       //   field: "_id",
       //   'type': "asc",
       //}],
-      'pos': 2131231232,
-      'len': 10342
+      //'pos': 2131231232,
+      //'len': 10342
 	  }]
     }
   }
@@ -33,5 +33,5 @@ Every DataKitten file starts with four static bytes (`0x4D 0x65 0x6F 0x77`) , fo
 (UInt64, Document) // the uint64 is the position of the next document in the collection
 
 ```json
-UInt64...
+UInt64 UInt32...
 ```

@@ -24,7 +24,7 @@ class DataKittenTests: XCTestCase {
     var col: DataKitten.Collection! = nil
     
     override func setUp() {
-        self.storage = try! StorageEngine(path: "/Users/robbert/Desktop/DataKittenDB")
+        self.storage = try! StorageEngine(path: "/Users/joannis/Desktop/database.dk")
         self.db = Database(storage: storage)
         self.col = db["testcol"]
     }
