@@ -50,18 +50,18 @@ public class StorageEngine {
             fm.createFile(atPath: filePath, contents: nil, attributes: nil)
             self.fileHandle = try FileHandle(forUpdating: URL(fileURLWithPath: self.filePath))
             
-            self.fileHandle.write(Data(bytes: [0x4d, 0x65, 0x6f, 0x77, 0x00, 13, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 5, 0, 0, 0, 0]))
+            self.fileHandle.write(Data(bytes: [0x4d, 0x65, 0x6f, 0x77, 0x00, 13, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
             
             self.m = [
                 "free": .binary(subtype: .generic, data: []),
                 "cols": [:]
             ]
-            self.headerPosition = try storeData(Data(bytes: self.m.bytes))
+            self.headerPosition = self.fileHandle.seekToEndOfFile()
+            self.fileHandle.write(Data(bytes: self.m.bytes))
         } else {
             self.fileHandle = try FileHandle(forUpdating: URL(fileURLWithPath: self.filePath))
             self.headerPosition = try self.readHeaderPosition()
             self.m = try readHeader()
-            print(self.m)
         }
     }
     
@@ -94,7 +94,25 @@ public class StorageEngine {
         return position
     }
     
-    fileprivate func removeData(atPosition startPosition: UInt64, withLength length: UInt32) throws {
+    fileprivate func findFreeSpaces() throws -> [(location: UInt64, length: UInt32, freeSpaceLocationInheader: Int)] {
+        guard case .binary(_, var free) = self.headerDocument["free"], free.count % 12 == 0 else {
+            throw DefaultStorageError.invalidHeaderDocument(key: "free")
+        }
+        
+        var freeSpaces = [(location: UInt64, length: UInt32, freeSpaceLocationInheader: Int)]()
+        var position = 0
+        
+        while free.count >= 12 {
+            freeSpaces.append((try fromBytes(free[0..<8]), try fromBytes(free[8..<12]), position))
+            
+            free.removeFirst(12)
+            position += 12
+        }
+        
+        return freeSpaces
+    }
+    
+    public func removeData(atPosition startPosition: UInt64, withLength length: UInt32) throws {
         guard case .binary(_, var free) = self.headerDocument["free"] else {
             throw DefaultStorageError.invalidHeaderDocument(key: "free")
         }
@@ -107,17 +125,43 @@ public class StorageEngine {
     
     public func storeData(_ data: Data) throws -> UInt64 {
         self.lock.lock()
+        
+        defer {
+            self.lock.unlock()
+        }
+        
+        let freeSpaces = try findFreeSpaces()
+        guard case .binary(_, var free) = self.headerDocument["free"] else {
+            throw DefaultStorageError.invalidHeaderDocument(key: "free")
+        }
+        
+        for space in freeSpaces where Int(space.length) >= data.count {
+            self.fileHandle.seek(toFileOffset: space.location)
+            self.fileHandle.write(data)
+            
+            let locationRange = space.freeSpaceLocationInheader..<space.freeSpaceLocationInheader + 12
+            
+            if data.count == Int(space.length) {
+                free.removeSubrange(locationRange)
+            } else {
+                let newOffset = space.location + UInt64(data.count)
+                let newLength = space.length - UInt32(data.count)
+                
+                free.replaceSubrange(locationRange, with: newOffset.bytes + newLength.bytes)
+            }
+            
+            self.headerDocument["free"] = .binary(subtype: .generic, data: free)
+            
+            return space.location
+        }
+        
         let location = self.fileHandle.seekToEndOfFile()
-        let data = Data(data)
         self.fileHandle.write(data)
-        self.lock.unlock()
         
         return location
     }
     
     public func storeDocument(_ document: Document, inCollectionNamed collectionName: String) throws {
-        _ = try self.storeData(Data(bytes: document.bytes))
-        
         var collectionDocument: Document
         
         if let c = self.headerDocument["cols"][collectionName].documentValue {
@@ -233,7 +277,7 @@ public class StorageEngine {
             }
             
             while data.count >= 12 {
-                documentLocations.append((try fromBytes(data[0..<8]), try fromBytes(data[0..<4])))
+                documentLocations.append((try fromBytes(data[0..<8]), try fromBytes(data[8..<12])))
                 data.removeFirst(12)
             }
         }

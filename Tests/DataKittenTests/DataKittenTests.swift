@@ -40,6 +40,7 @@ class DataKittenTests: XCTestCase {
         }
         
         XCTAssertEqual(doc["hello"], "world")
+        print(doc)
     }
     
     func testFind() throws {
@@ -48,6 +49,7 @@ class DataKittenTests: XCTestCase {
         XCTAssertGreaterThan(docs.count, 1)
         
         for doc in docs {
+            print(doc.makeExtendedJSON())
             XCTAssertEqual(doc["hello"], "world")
         }
     }
