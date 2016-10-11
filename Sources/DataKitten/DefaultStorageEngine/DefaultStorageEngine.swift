@@ -112,6 +112,52 @@ public class StorageEngine {
         return freeSpaces
     }
     
+    fileprivate func findFreeSpace(withMinimumLengthOf requiredLength: Int) throws -> (location: UInt64, length: UInt32, freeSpaceLocationInheader: Int)? {
+        guard case .binary(_, var free) = self.headerDocument["free"], free.count % 12 == 0 else {
+            throw DefaultStorageError.invalidHeaderDocument(key: "free")
+        }
+        
+        var position = 0
+        
+        while free.count >= position + 12 {
+            let length = try fromBytes(free[position+8..<position+12]) as UInt32
+            
+            if UInt32(requiredLength) <= length {
+                let location = try fromBytes(free[position..<position+8]) as UInt64
+                
+                let positionInHeader = position
+                return (location, length, positionInHeader)
+            }
+            
+            free.removeFirst(12)
+            position += 12
+        }
+        
+        return nil
+    }
+    
+    public func optimizeFreeSpace() throws {
+        let freeSpaces = try findFreeSpaces()
+        
+        var newFreeSpaces = [(UInt64, UInt32)]()
+        newFreeSpaces.reserveCapacity(freeSpaces.count)
+        
+        for (location, length, _) in freeSpaces {
+            newFreeSpaces.append((location, length))
+        }
+        
+        newFreeSpaces.sort { lhs, rhs in
+            return lhs.1 > rhs.1
+        }
+        
+        let freeSpaceBytes = newFreeSpaces.map {
+            return $0.0.bytes + $0.1.bytes
+        }.reduce([], +)
+        
+        self.headerDocument["free"] = .binary(subtype: .generic, data: freeSpaceBytes)
+        try writeHeader()
+    }
+    
     public func removeData(atPosition startPosition: UInt64, withLength length: UInt32) throws {
         guard case .binary(_, var free) = self.headerDocument["free"] else {
             throw DefaultStorageError.invalidHeaderDocument(key: "free")
@@ -130,12 +176,11 @@ public class StorageEngine {
             self.lock.unlock()
         }
         
-        let freeSpaces = try findFreeSpaces()
         guard case .binary(_, var free) = self.headerDocument["free"] else {
             throw DefaultStorageError.invalidHeaderDocument(key: "free")
         }
         
-        for space in freeSpaces where Int(space.length) >= data.count {
+        if let space = try findFreeSpace(withMinimumLengthOf: data.count) {
             self.fileHandle.seek(toFileOffset: space.location)
             self.fileHandle.write(data)
             

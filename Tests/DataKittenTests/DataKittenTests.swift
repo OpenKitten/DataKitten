@@ -29,6 +29,10 @@ class DataKittenTests: XCTestCase {
         self.col = db["testcol"]
     }
     
+    override func tearDown() {
+        try! storage.optimizeFreeSpace()
+    }
+    
     func testInsert() throws {
         try col.insert(["hello": "world"])
     }
