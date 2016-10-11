@@ -41,17 +41,55 @@ public class Collection {
         return id
     }
     
-    public func findOne() throws -> Document? {
-        if let data = try self.db.storageEngine.makeDataIterator(inCollectionNamed: name).next() {
-            return Document(data: data)
-        }
-        
-        return nil
+    public func findOne(matching filter: Document? = nil) throws -> Document? {
+        return try find(matching: filter).next()
     }
     
-    public func find() throws -> [Document] {
-        return try self.db.storageEngine.makeDataIterator(inCollectionNamed: name).flatMap { data in
-            return Document(data: data)
+    public func find(matching filter: Document? = nil) throws -> AnyIterator<Document> {
+        let iter = try self.db.storageEngine.makeDataIterator(inCollectionNamed: name)
+            
+        return AnyIterator {
+            var document: Document? = nil
+            
+            repeat {
+                guard let data = iter.next() else {
+                    return nil
+                }
+                
+                document = Document(data: data)
+                
+                if (document ?? [:]).matches(filter ?? [:]) {
+                    return document
+                }
+            } while(document != nil)
+            
+            return nil
         }
+    }
+    
+    public func remove(matching filter: Document? = nil, multiple: Bool = false) throws -> Int {
+        let iter = try self.db.storageEngine.makeFullDataIterator(inCollectionNamed: name)
+        
+        var document: Document? = nil
+        var removed = 0
+        
+        repeat {
+            guard let data = iter.next() else {
+                return removed
+            }
+            
+            document = Document(data: data.0)
+            
+            if (document ?? [:]).matches(filter ?? [:]) {
+                try self.db.storageEngine.removeDocument(fromCollection: self.name, atPosition: data.1, withLength: UInt32(data.0.count))
+                removed += 1
+                
+                if !multiple {
+                    return removed
+                }
+            }
+        } while(document != nil)
+        
+        return removed
     }
 }

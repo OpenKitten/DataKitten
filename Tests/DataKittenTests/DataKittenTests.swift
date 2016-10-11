@@ -63,4 +63,33 @@ class DataKittenTests: XCTestCase {
         
         print(docs.count)
     }
+    
+    func testBasics() throws {
+        for i in 0..<10 {
+            try col.insert(["henk": ~i])
+        }
+        
+        for _ in 0..<20 {
+            try col.insert(["henk": "piet"])
+        }
+        
+        XCTAssertEqual(Array(try col.find(matching: ["henk": "piet"])).count, 20)
+        XCTAssertEqual(Array(try col.find(matching: ["henk": 3])).count, 1)
+        
+        var removed = try col.remove(matching: ["henk": "piet"], multiple: false)
+        
+        XCTAssertEqual(removed, 1)
+        
+        XCTAssertEqual(Array(try col.find(matching: ["henk": "piet"])).count, 19)
+        XCTAssertEqual(Array(try col.find(matching: ["henk": 3])).count, 1)
+        
+        removed = try col.remove(matching: ["henk": "piet"], multiple: true)
+        
+        XCTAssertEqual(removed, 19)
+        
+        XCTAssertEqual(Array(try col.find(matching: ["henk": "piet"])).count, 0)
+        XCTAssertEqual(Array(try col.find(matching: ["henk": 3])).count, 1)
+        
+        XCTAssertGreaterThanOrEqual(try col.remove(matching: [:], multiple: true), 1)
+    }
 }

@@ -22,6 +22,7 @@ public enum DefaultStorageError : Error {
     case directoryDoesNotExist(atPath: String)
     case invalidHeaderDocument(key: String)
     case corruptDLTPosition(UInt64)
+    case looseDocument(atPosition: UInt64)
 }
 
 public class StorageEngine {
@@ -155,6 +156,58 @@ public class StorageEngine {
         free.append(contentsOf: length.bytes)
         
         self.headerDocument["free"] = .binary(subtype: .generic, data: free)
+    }
+    
+    public func removeDocument(fromCollection collection: String, atPosition startPosition: UInt64, withLength length: UInt32) throws {
+        try removeData(atPosition: startPosition, withLength: length)
+        
+        guard case .binary(_, var dlts) = self.headerDocument["cols"][collection]["dlts"] else {
+            throw DefaultStorageError.invalidHeaderDocument(key: "cols.\(collection).dlts")
+        }
+        
+        var dltLocations = [(UInt64, UInt32, Int)]()
+        var position = 0
+        
+        while dlts.count >= position + 12 {
+            let start = try fromBytes(dlts[position..<position+8]) as UInt64
+            let length = try fromBytes(dlts[position+8..<position+12]) as UInt32
+            
+            dltLocations.append((start, length, position))
+            position += 12
+        }
+        
+        for (location, length, dltPositionInArray) in dltLocations {
+            fileHandle.seek(toFileOffset: location)
+            var dltData = fileHandle.readData(ofLength: Int(length))
+            guard dltData.count == Int(length) else {
+                throw DefaultStorageError.corruptDLTPosition(location)
+            }
+            
+            guard dltData.count == Int(length) && dltData.count % 12 == 0 else {
+                throw DefaultStorageError.corruptDLTPosition(location)
+            }
+            
+            var position = 0
+            
+            while dltData.count >= position+12 {
+                let documentPosition = try fromBytes(dltData[position..<position+8]) as UInt64
+                
+                if documentPosition == startPosition {
+                    dltData.removeSubrange(position..<position + 12)
+                    try self.removeData(atPosition: location, withLength: length)
+                    let DLTposition = try self.storeData(dltData)
+                    
+                    dlts.replaceSubrange(dltPositionInArray..<dltPositionInArray+12, with: DLTposition.bytes + UInt32(dltData.count).bytes)
+                    self.headerDocument["cols"][collection]["dlts"] = .binary(subtype: .generic, data: Array(dlts))
+                    self.headerPosition = try writeHeader()
+                    return
+                }
+                
+                position += 12
+            }
+        }
+        
+        throw DefaultStorageError.looseDocument(atPosition: startPosition)
     }
     
     public func storeData(_ data: Data) throws -> UInt64 {
@@ -322,6 +375,60 @@ public class StorageEngine {
             
             self.fileHandle.seek(toFileOffset: dataMetadata.0)
             return self.fileHandle.readData(ofLength: Int(dataMetadata.1))
+        }
+    }
+    
+    public func makeFullDataIterator(inCollectionNamed collection: String) throws -> AnyIterator<(Data, UInt64)> {
+        guard case .binary(_, var dlts) = self.headerDocument["cols"][collection]["dlts"] else {
+            return AnyIterator { return nil }
+        }
+        
+        var dltLocations = [(UInt64, UInt32, Int)]()
+        var position = 0
+        
+        while dlts.count >= position + 12 {
+            let start = try fromBytes(dlts[position..<position+8]) as UInt64
+            let length = try fromBytes(dlts[position+8..<position+12]) as UInt32
+            
+            dltLocations.append((start, length, position))
+            position += 12
+        }
+        
+        let documentLocationTables: [(UInt64, UInt32, Data, Int)] = dltLocations.flatMap { location, length, dltPositionInArray in
+            fileHandle.seek(toFileOffset: location)
+            let collection = fileHandle.readData(ofLength: Int(length))
+            guard collection.count == Int(length) else {
+                return nil
+            }
+            
+            return (location, length, collection, dltPositionInArray)
+        }
+        
+        var documentLocations = [(UInt64, UInt32)]()
+        
+        for DLT in documentLocationTables {
+            fileHandle.seek(toFileOffset: DLT.0)
+            var data = fileHandle.readData(ofLength: Int(DLT.1))
+            
+            guard data.count == Int(DLT.1) && data.count % 12 == 0 else {
+                throw DefaultStorageError.corruptDLTPosition(DLT.0)
+            }
+            
+            while data.count >= 12 {
+                documentLocations.append((try fromBytes(data[0..<8]), try fromBytes(data[8..<12])))
+                data.removeFirst(12)
+            }
+        }
+        
+        var iterator = documentLocations.makeIterator()
+        
+        return AnyIterator {
+            guard let dataMetadata = iterator.next() else {
+                return nil
+            }
+            
+            self.fileHandle.seek(toFileOffset: dataMetadata.0)
+            return (self.fileHandle.readData(ofLength: Int(dataMetadata.1)), dataMetadata.0)
         }
     }
 }
