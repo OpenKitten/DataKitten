@@ -38,7 +38,7 @@ class DataKittenTests: XCTestCase {
     }
     
     func testBulkInsert() throws {
-        for _ in 0..<123 {try col.insert(["hello": "world"])}
+        for _ in 0..<1221 {try col.insert(["hello": "world"])}
     }
     
     func testFindOne() throws {
@@ -60,5 +60,7 @@ class DataKittenTests: XCTestCase {
         for doc in docs {
             XCTAssertEqual(doc["hello"], "world")
         }
+        
+        print(docs.count)
     }
 }

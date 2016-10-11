@@ -129,7 +129,6 @@ public class StorageEngine {
                 return (location, length, positionInHeader)
             }
             
-            free.removeFirst(12)
             position += 12
         }
         
@@ -137,25 +136,14 @@ public class StorageEngine {
     }
     
     public func optimizeFreeSpace() throws {
-        let freeSpaces = try findFreeSpaces()
-        
-        var newFreeSpaces = [(UInt64, UInt32)]()
-        newFreeSpaces.reserveCapacity(freeSpaces.count)
-        
-        for (location, length, _) in freeSpaces {
-            newFreeSpaces.append((location, length))
-        }
-        
-        newFreeSpaces.sort { lhs, rhs in
-            return lhs.1 > rhs.1
-        }
-        
-        let freeSpaceBytes = newFreeSpaces.map {
-            return $0.0.bytes + $0.1.bytes
+        let freeSpaces = try findFreeSpaces().sorted { lhs, rhs in
+            return lhs.length > rhs.length
+        }.map {
+            return $0.location.bytes + $0.length.bytes
         }.reduce([], +)
         
-        self.headerDocument["free"] = .binary(subtype: .generic, data: freeSpaceBytes)
-        try writeHeader()
+        self.headerDocument["free"] = .binary(subtype: .generic, data: freeSpaces)
+        self.headerPosition = try writeHeader()
     }
     
     public func removeData(atPosition startPosition: UInt64, withLength length: UInt32) throws {
@@ -225,12 +213,11 @@ public class StorageEngine {
         var dltLocations = [(UInt64, UInt32, Int)]()
         var position = 0
         
-        while dlts.count >= 12 {
-            let start = try fromBytes(dlts[0..<8]) as UInt64
-            let length = try fromBytes(dlts[8..<12]) as UInt32
+        while dlts.count >= position+12 {
+            let start = try fromBytes(dlts[position..<position+8]) as UInt64
+            let length = try fromBytes(dlts[position+8..<position+12]) as UInt32
             
             dltLocations.append((start, length, position))
-            dlts.removeFirst(12)
             position += 12
         }
         
@@ -247,7 +234,7 @@ public class StorageEngine {
         let documentPosition = try storeData(Data(bytes: document.bytes))
         let documentLocationData = documentPosition.bytes + UInt32(document.byteCount).bytes
         
-        let maxDLTDocuments = 10
+        let maxDLTDocuments = 100
         
         defer {
             do {
@@ -256,7 +243,7 @@ public class StorageEngine {
             } catch {}
         }
         
-        for (location, length, documentLocations, dltPositionInArray) in documentLocationCollections where documentLocations.count < maxDLTDocuments * 12 {
+        for (location, length, documentLocations, dltPositionInArray) in documentLocationCollections where documentLocations.count <= (maxDLTDocuments - 1) * 12 {
             var documentLocations = documentLocations
             documentLocations.append(contentsOf: documentLocationData)
             try self.removeData(atPosition: location, withLength: length)
@@ -292,12 +279,11 @@ public class StorageEngine {
         var dltLocations = [(UInt64, UInt32, Int)]()
         var position = 0
         
-        while dlts.count >= 12 {
-            let start = try fromBytes(dlts[0..<8]) as UInt64
-            let length = try fromBytes(dlts[8..<12]) as UInt32
+        while dlts.count >= position + 12 {
+            let start = try fromBytes(dlts[position..<position+8]) as UInt64
+            let length = try fromBytes(dlts[position+8..<position+12]) as UInt32
             
             dltLocations.append((start, length, position))
-            dlts.removeFirst(12)
             position += 12
         }
         
