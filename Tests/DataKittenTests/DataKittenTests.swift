@@ -33,14 +33,19 @@ class DataKittenTests: XCTestCase {
         try col.insert(["hello": "world"])
     }
     
+    func testBulkInsert() throws {
+        for _ in 0..<123 {try col.insert(["hello": "world"])}
+    }
+    
     func testFindOne() throws {
+        try col.insert(["hello": "world"])
+        
         guard let doc = try col.findOne() else {
             XCTFail("no document found")
             return
         }
         
         XCTAssertEqual(doc["hello"], "world")
-        print(doc)
     }
     
     func testFind() throws {
@@ -49,7 +54,6 @@ class DataKittenTests: XCTestCase {
         XCTAssertGreaterThan(docs.count, 1)
         
         for doc in docs {
-            print(doc.makeExtendedJSON())
             XCTAssertEqual(doc["hello"], "world")
         }
     }

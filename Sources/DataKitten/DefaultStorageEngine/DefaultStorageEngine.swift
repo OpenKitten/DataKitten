@@ -230,7 +230,7 @@ public class StorageEngine {
         
         if case .binary(_, var dlts) = collectionDocument["dlts"] {
             let dltLocation = try storeData(Data(bytes: documentLocationData))
-            dlts.append(contentsOf: dltLocation.bytes + documentLocationData.count.bytes)
+            dlts.append(contentsOf: dltLocation.bytes + UInt32(documentLocationData.count).bytes)
             collectionDocument["dlts"] = .binary(subtype: .generic, data: dlts)
             
             return
