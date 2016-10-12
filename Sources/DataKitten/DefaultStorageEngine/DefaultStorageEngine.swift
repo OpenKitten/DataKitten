@@ -136,6 +136,12 @@ public class StorageEngine {
         return nil
     }
     
+    public func count(inCollection collection: String) throws -> Int {
+        return try self.makeDocumentLocationTableLocations(fromCollectionNamed: collection).map({ _, byteCount, _ in
+            return Int(byteCount / 12)
+        }).reduce(0, +)
+    }
+    
     public func optimizeFreeSpace() throws {
         let freeSpaces = try findFreeSpaces().sorted { lhs, rhs in
             return lhs.length > rhs.length
@@ -247,7 +253,7 @@ public class StorageEngine {
         return location
     }
     
-    public func storeDocument(_ document: Document, inCollectionNamed collectionName: String) throws {
+    public func storeDocument(_ document: Document, inCollectionNamed collectionName: String, writingHeaders: Bool = true) throws {
         var collectionDocument: Document
         
         if let c = self.headerDocument["cols"][collectionName].documentValue {
@@ -287,12 +293,15 @@ public class StorageEngine {
         let documentPosition = try storeData(Data(bytes: document.bytes))
         let documentLocationData = documentPosition.bytes + UInt32(document.byteCount).bytes
         
-        let maxDLTDocuments = 100
+        let maxDLTDocuments = 1000
         
         defer {
             do {
                 self.headerDocument["cols"][collectionName] = ~collectionDocument
-                self.headerPosition = try writeHeader()
+                
+                if writingHeaders {
+                    self.headerPosition = try writeHeader()
+                }
             } catch {}
         }
         
@@ -324,9 +333,9 @@ public class StorageEngine {
         throw DefaultStorageError.invalidHeaderDocument(key: "dlts")
     }
     
-    public func makeDataIterator(inCollectionNamed collection: String) throws -> AnyIterator<Data> {
+    public func makeDocumentLocationTableLocations(fromCollectionNamed collection: String) throws -> [(UInt64, UInt32, Int)] {
         guard case .binary(_, var dlts) = self.headerDocument["cols"][collection]["dlts"] else {
-            return AnyIterator { return nil }
+            return []
         }
         
         var dltLocations = [(UInt64, UInt32, Int)]()
@@ -340,7 +349,13 @@ public class StorageEngine {
             position += 12
         }
         
-        let documentLocationTables: [(UInt64, UInt32, Data, Int)] = dltLocations.flatMap { location, length, dltPositionInArray in
+        return dltLocations
+    }
+    
+    public func findDocumentLocationTables(fromCollectionNamed collection: String) throws -> [(UInt64, UInt32, Data, Int)] {
+        let documentLocationTableLocations = try makeDocumentLocationTableLocations(fromCollectionNamed: collection)
+        
+        let documentLocationTables: [(UInt64, UInt32, Data, Int)] = documentLocationTableLocations.flatMap { location, length, dltPositionInArray in
             fileHandle.seek(toFileOffset: location)
             let collection = fileHandle.readData(ofLength: Int(length))
             guard collection.count == Int(length) else {
@@ -350,6 +365,11 @@ public class StorageEngine {
             return (location, length, collection, dltPositionInArray)
         }
         
+        return documentLocationTables
+    }
+    
+    public func makeDataIterator(inCollectionNamed collection: String) throws -> AnyIterator<Data> {
+        let documentLocationTables = try findDocumentLocationTables(fromCollectionNamed: collection)
         var documentLocations = [(UInt64, UInt32)]()
         
         for DLT in documentLocationTables {

@@ -41,6 +41,33 @@ public class Collection {
         return id
     }
     
+    @discardableResult
+    public func insert(_ documents: [Document]) throws -> [Value] {
+        guard documents.count > 0 else {
+            return []
+        }
+        
+        var documents = documents.map { doc -> (Document) in
+            var doc = doc
+            
+            if doc["_id"] == .nothing {
+                doc["_id"] = ~ObjectId()
+            }
+            
+            return doc
+        }
+        
+        let lastDocument = documents.removeLast()
+        
+        for document in documents {
+            try db.storageEngine.storeDocument(document, inCollectionNamed: self.name, writingHeaders: false)
+        }
+        
+        try db.storageEngine.storeDocument(lastDocument, inCollectionNamed: self.name, writingHeaders: true)
+        
+        return documents.map{ $0["_id"] } + [lastDocument["_id"]]
+    }
+    
     public func findOne(matching filter: Document? = nil) throws -> Document? {
         return try find(matching: filter).next()
     }
@@ -65,6 +92,14 @@ public class Collection {
             
             return nil
         }
+    }
+    
+    public func count(matching filter: Document? = nil) throws -> Int {
+        if filter == nil {
+            return try self.db.storageEngine.count(inCollection: self.name)
+        }
+        
+        return Array(try self.find(matching: filter)).count
     }
     
     public func remove(matching filter: Document? = nil, multiple: Bool = false) throws -> Int {

@@ -38,7 +38,9 @@ class DataKittenTests: XCTestCase {
     }
     
     func testBulkInsert() throws {
-        for _ in 0..<1221 {try col.insert(["hello": "world"])}
+        let documents = [Document](repeating: ["hello": "world"], count: 1221)
+        
+        try col.insert(documents)
     }
     
     func testFindOne() throws {
