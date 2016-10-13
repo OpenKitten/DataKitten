@@ -102,6 +102,7 @@ public class Collection {
         return Array(try self.find(matching: filter)).count
     }
     
+    @discardableResult
     public func remove(matching filter: Document? = nil, multiple: Bool = false) throws -> Int {
         let iter = try self.db.storageEngine.makeFullDataIterator(inCollectionNamed: name)
         

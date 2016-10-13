@@ -30,6 +30,7 @@ class DataKittenTests: XCTestCase {
     }
     
     override func tearDown() {
+        try! col.remove(matching: [:], multiple: true)
         try! storage.optimizeFreeSpace()
     }
     
@@ -78,6 +79,10 @@ class DataKittenTests: XCTestCase {
         XCTAssertEqual(Array(try col.find(matching: ["henk": "piet"])).count, 20)
         XCTAssertEqual(Array(try col.find(matching: ["henk": 3])).count, 1)
         
+        XCTAssertEqual(try col.count(), 30)
+        XCTAssertEqual(try col.count(matching: ["henk": "piet"]), 20)
+        XCTAssertEqual(try col.count(matching: ["henk": 3]), 1)
+        
         var removed = try col.remove(matching: ["henk": "piet"], multiple: false)
         
         XCTAssertEqual(removed, 1)
@@ -92,6 +97,6 @@ class DataKittenTests: XCTestCase {
         XCTAssertEqual(Array(try col.find(matching: ["henk": "piet"])).count, 0)
         XCTAssertEqual(Array(try col.find(matching: ["henk": 3])).count, 1)
         
-        XCTAssertGreaterThanOrEqual(try col.remove(matching: [:], multiple: true), 1)
+        XCTAssertEqual(try col.remove(matching: [:], multiple: true), 10)
     }
 }
